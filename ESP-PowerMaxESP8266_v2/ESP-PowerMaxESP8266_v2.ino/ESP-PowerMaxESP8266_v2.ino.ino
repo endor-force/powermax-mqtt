@@ -59,7 +59,7 @@ IPAddress PM_LAN_BROADCAST_IP(192, 168, 32, 12);
 #define Firmware_Date __DATE__
 #define Firmware_Time __TIME__
 
-
+#define JsonHeaderText "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n"
 // MQTT SETUP
 #define PM_ENABLE_MQTT_ACCESS
 
@@ -87,7 +87,11 @@ char PORT_FOR_MQTT[7];
 char MQTT_USER[30];
 char MQTT_PASS[30];
 //Inactivity timer wil always default to this value on boot (it is not stored in EEPROM at the moment, though only resets when the Powermax power cycles (hence rarely))
-int inactivity_seconds = 10;
+int inactivity_seconds = 20;
+//These define the pins used for triggering alarms (or something else!) and the timer to turn them off
+int activatedPinA = -1;
+int activatedPinB = -1;
+unsigned long userPinResetTime = 0;
 
 //Global variables for managing zones
 int zones_enrolled_count = MAX_ZONE_COUNT;
@@ -95,64 +99,17 @@ int max_zone_id_enrolled = MAX_ZONE_COUNT;
 
 #define ALARM_STATE_CHANGE 0
 #define ZONE_STATE_CHANGE 1
-#define EEPROM_IP_ADDR_LOC 100
+//MQTT Target IP
+#define EEPROM_IP_ADDR_LOC 100 
+//MQTT Target port
 #define EEPROM_PORT_ADDR_LOC 120
+//MQTT Userid
 #define EEPROM_USER_ADDR_LOC 140
-#define EEPROM_PASS_ADDR_LOC 160
+//MQTT Password
+#define EEPROM_PASS_ADDR_LOC 170
 
 
-/*
-void SendJSONMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsigned char zoneID, int zone_or_system_update) {
-  char message_text[600];
-  message_text[0] = '\0';
 
-  //Convert zone ID to text
-  char zoneIDtext[10];
-  itoa(zoneID, zoneIDtext, 10);
-
-  DEBUG(LOG_NOTICE,"Creating JSON string");
-  //Build key JSON headers and structure
-  strncpy(message_text, "POST / HTTP/1.1\r\nHost: ", 600);
-  strcat(message_text, IP_FOR_MQTT);
-  strcat(message_text, ":");
-  strcat(message_text, PORT_FOR_MQTT);
-  strcat(message_text, "\r\nContent-Type: application/json;charset=utf-8\r\nServer: Visonic Alarm\r\nConnection: close\r\n\r\n");
-  //strncpy(message_text, " ", 500);
-  
-  if (zone_or_system_update == ALARM_STATE_CHANGE) {
-    //Here we have an alarm status change (zone 0) so put the status into JSON
-    strcat(message_text, "{\"stat_str\": \"");
-    strcat(message_text, ZoneOrEvent);
-    strcat(message_text, "\",\r\n\"stat_update_from\": \"");
-    strcat(message_text, WhoOrState);
-    strcat(message_text, "\"");
-  }
-  else if (zone_or_system_update == ZONE_STATE_CHANGE) {
-    //Here we have a zone status change so put this information into JSON
-    strcat(message_text, "{\"zone_id\": \"");
-    strcat(message_text, zoneIDtext);
-    strcat(message_text, "\",\r\n\"zone_name\": \"");
-    strcat(message_text, ZoneOrEvent);
-    strcat(message_text, "\",\r\n\"zone_status\": \"");
-    strcat(message_text, WhoOrState);
-    strcat(message_text, "\"");
-  }
-  //Close the JSON string
-  strcat(message_text, "}\r\n");
-
-  //Useful debug log below, but slows things down so disabled when not needed
-  //DEBUG(LOG_NOTICE, message_text);
-
-  //If not connected (we shouldnt be) then connect to ST
-  WiFiClient client;
-  if (!client.connect(IP_FOR_MQTT, atoi(PORT_FOR_MQTT))) {
-    Serial.println("connection failed");
-    return;
-  }
-
-  //Finally send the JSON to ST
-  client.print(message_text);
-}*/
 
 void ReadEEPROMSettings() {
     for(int ix=0; ix < sizeof(IP_FOR_MQTT); ix++) {
@@ -199,7 +156,7 @@ void WriteEEPROMSettings() {
 class MyPowerMax : public PowerMaxAlarm
 {
 public:
-    bool zone_motion[MAX_ZONE_COUNT+1] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    bool zone_motion[MAX_ZONE_COUNT+1] = {0};
     virtual void OnStatusChange(const PlinkBuffer  * Buff)
     {
         //call base class implementation first, this will send ACK back and upate internal state.
@@ -271,12 +228,33 @@ public:
     void CheckInactivityTimers() {
         for(int ix=1; ix<=max_zone_id_enrolled; ix++) {
             if (zone_motion[ix]) {
-                if (os_getCurrentTimeSec() - zone[ix].lastEventTime > inactivity_seconds) {
+                if ((os_getCurrentTimeSec() - zone[ix].lastEventTime) > inactivity_seconds) {
                     zone_motion[ix]= false;
                     SendMQTTMessage(this->getZoneName(ix), "No Motion", ix, ZONE_STATE_CHANGE);  
                 }
             }
         }
+    }
+
+    bool sendCommandCC(int valzz) {
+
+        unsigned char buff[] = {0xA1,0x00,0x00,0x07,0x12,0x34,0x00,0x00,0x00,0x00,0x00,0x43}; addPin(buff, 4, true);
+        char str[1];
+        sprintf(str, "%#X", valzz);
+        buff[3] = valzz;
+      
+        unsigned short i;
+        char printBuffer[MAX_BUFFER_SIZE*3+3];
+        char *bufptr;      /* Current char in buffer */
+        bufptr=printBuffer;
+        for (i=0;i<(sizeof(buff));i++) {
+            sprintf(bufptr,"%02X ",buff[i]);
+            bufptr=bufptr+3;
+        }  
+      
+        DEBUG(LOG_DEBUG,"BufferSize: %d" ,sizeof(buff));
+        DEBUG(LOG_DEBUG,"Buffer: %s", printBuffer); 
+        return sendBuffer(buff, sizeof(buff));
     }
 
 };
@@ -444,7 +422,32 @@ void handleRoot() {
   WiFi.macAddress(mac);
 
   char szTmp[PRINTF_BUF*2];
-  sprintf(szTmp, "<html><b>Dashboard for esp8266 controlled Visonic Powermax.</b><br><br>MAC Address: %02X%02X%02X%02X%02X%02X<br>Uptime: %02d:%02d:%02d.%02d<br>Free heap: %u<br>MQTT Status code: %u<br>MQTT Reconnects: %u<br><br>Web Commands<br><a href='/armaway' target='_blank'>Arm Away</a><br><a href='/armhome' target='_blank'>Arm Home</a><br><a href='/disarm' target='_blank'>Disarm</a><br><br>JSON Endpoints<br><a href='/status'>Alarm Status</a><br><a href='/settings'>Smart Things Details</a><br><a href='/getzonenames'>Get Zone Names</a><br><br>Configuration<br><a href='/config'>inactivity_seconds, ip_for_mqtt, port_for_mqtt, mqtt_user, mqtt_pass</a><br><a href='/update'>Update Firmware</a></html>", mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], (int)days, (int)hours, (int)minutes, (int)val, ESP.getFreeHeap(), mqttClient.state(), mqtt_reconnects);
+  sprintf(szTmp, "<html>"
+  		"<b>Dashboard for esp8266 controlled Visonic Powermax.</b><br><br>"
+		"MAC Address: %02X%02X%02X%02X%02X%02X<br>"
+		"Uptime: %02d:%02d:%02d.%02d<br>Free heap: %u<br>MQTT Status code: %u<br>"
+		"MQTT Reconnects: %u<br><br>Web Commands<br>"
+		"<a href='/armaway' target='_blank'>Arm Away</a><br>"
+		"<a href='/armhome' target='_blank'>Arm Home</a><br>"
+		"<a href='/disarm' target='_blank'>Disarm</a><br><br>"
+		"<a href='/armhome' target='_blank'>Arm Home</a><br>"
+                "<a href='/armawayinstant' target='_blank'>Instant Arm Away</a><br>"
+                "<a href='/armhomeinstant' target='_blank'>Instant Arm Home</a><br>"
+                "<a href='/alarm' target='_blank'>Sound the Alarm Options</a><br><br>"
+		"JSON Endpoints<br>"
+		"<a href='/status'>Alarm Status</a><br>"
+		"<a href='/settings'>Smart Things Details</a><br>"
+		"<a href='/getzonenames'>Get Zone Names</a><br><br>"
+		"Configuration<br>"
+		"<a href='/config'>inactivity_seconds, ip_for_mqtt, port_for_mqtt, mqtt_user, mqtt_pass</a><br>"
+		"<a href='/update'>Update Firmware</a>"
+		"</html>",
+		mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],
+		(int)days, (int)hours, (int)minutes, (int)val, 
+		ESP.getFreeHeap(),
+		mqttClient.state(), 
+		mqtt_reconnects);"
+
   server.send(200, "text/html", szTmp);
 }
 
@@ -502,10 +505,7 @@ void handleStatus() {
   //Now collect all status information and send it to the user
   WiFiClient client = server.client();
   
-  client.print("HTTP/1.1 200 OK\r\n");
-  client.print("Content-Type: text/plain\r\n");
-  client.print("Connection: close\r\n");
-  client.print("\r\n");
+  client.print(JsonHeaderText);
 
   WebOutput out(&client);
   pm.dumpToJson(&out);
@@ -518,10 +518,8 @@ void handleRefresh() {
   //This returns the current arm state in case it gets out of sync somehow
   WiFiClient client = server.client();
   
-  client.print("HTTP/1.1 200 OK\r\n");
-  client.print("Content-Type: text/plain\r\n");
-  client.print("Connection: close\r\n");
-  client.print("\r\n{\"stat_str\":\"");
+  client.print(JsonHeaderText);
+  client.print("{\"stat_str\":\"");
 
   client.print(pm.GetStrPmaxSystemStatus(pm.GetSystemStatus()));
 
@@ -534,10 +532,9 @@ void handleSettings() {
   //This returns the current arm state in case it gets out of sync somehow
   WiFiClient client = server.client();
   
-  client.print("HTTP/1.1 200 OK\r\n");
-  client.print("Content-Type: text/plain\r\n");
-  client.print("Connection: close\r\n");
-  client.print("\r\n{\"ip_for_mqtt\":\"");
+  client.print(JsonHeaderText);
+
+  client.print("{\"ip_for_mqtt\":\"");
   client.print(IP_FOR_MQTT);
   client.print("\",\r\n\"port_for_mqtt\":");
   client.print(PORT_FOR_MQTT);
@@ -545,7 +542,7 @@ void handleSettings() {
   client.print(MQTT_USER);
   client.print("\",\r\n\"mqtt_pass\":");
   client.print("*************");
-  client.print("\",\r\n\"inactivity_seconds\":");
+  client.print(",\r\n\"inactivity_seconds\":");
   client.print((inactivity_seconds));
   
   client.print(",\r\n\"neohub_relay_firmware_date\":\"");
@@ -559,6 +556,10 @@ void handleSettings() {
 
 void handleGetZoneNames() {
   //This returns all zone names and types
+  int sizeofoutputstring = 170;
+  char outputstring[sizeofoutputstring+1]; //Used to store the output for each zone to speed output
+  char currentzonename[70]; //Max zone name of 70 bytes hence copy in one less to ensure an ending
+  char numberasstring[5];
 
   //First update zone count to reduce checking on unused zones
   pm.UpdateZonesEnrolledCount();
@@ -566,28 +567,33 @@ void handleGetZoneNames() {
   //Now setup the webserver connection and JSON creation
   WiFiClient client = server.client();
 
-  client.print("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{\"namedzonesenrolled\":");
-  client.print(zones_enrolled_count);
-  client.print(",\r\n\"maxzoneid\":");
-  client.print(max_zone_id_enrolled);
-  client.print(",\r\n\"zones\":[");
+  strncpy(outputstring, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{\"namedzonesenrolled\":", sizeofoutputstring);
+  itoa(zones_enrolled_count, numberasstring, 10);
+  strncat(outputstring, numberasstring, _max(0,sizeofoutputstring-strlen(outputstring))); //.c_str()
+  strncat(outputstring, ",\r\n\"maxzoneid\":", _max(0,sizeofoutputstring-strlen(outputstring)));
+  itoa(max_zone_id_enrolled, numberasstring, 10);
+  strncat(outputstring, numberasstring, _max(0,sizeofoutputstring-strlen(outputstring)));
+  strncat(outputstring, ",\r\n\"zones\":[\r\n", _max(0,sizeofoutputstring-strlen(outputstring)));
+  client.print(outputstring);
+  //client.write(outputstring, strlen(outputstring));
+  
   for(int ix=1; ix<=max_zone_id_enrolled; ix++) {
-      char currentzonename[50]; //Max zone name of 50 bytes
-      strcpy(currentzonename, pm.getZoneName(ix));
-      currentzonename[49] = '\0';
+     strncpy(currentzonename, pm.getZoneName(ix), 69);
      if (currentzonename != "Unknown") {
-     //if (pm.getZoneName(ix) != "Unknown") {
-        client.print("{\"zoneid\":");
-        client.print(ix);
-        client.print(",\r\n\"zonename\":\"");
-        client.print(currentzonename);
-        //client.print(pm.getZoneName(ix));
-        client.print("\",\r\n\"zonetype\":\"");
-        client.print(pm.getZoneSensorType(ix));
-        client.print("\"},\r\n");
+        //It isnt unknown so create an output text that we can send back to the client
+        strncpy(outputstring, "{\"zoneid\":", sizeofoutputstring);
+        itoa(ix, numberasstring, 10);
+        strncat(outputstring, numberasstring, _max(0,sizeofoutputstring-strlen(outputstring))); //.c_str()
+        strncat(outputstring, ",\r\n\"zonename\":\"", _max(0,sizeofoutputstring-strlen(outputstring)));
+        strncat(outputstring, currentzonename, _max(0,sizeofoutputstring-strlen(outputstring)));
+        strncat(outputstring, "\",\r\n\"zonetype\":\"", _max(0,sizeofoutputstring-strlen(outputstring)));
+        strncat(outputstring, pm.getZoneSensorType(ix), _max(0,sizeofoutputstring-strlen(outputstring)));
+        strncat(outputstring, "\"},\r\n", _max(0,sizeofoutputstring-strlen(outputstring)));
+        client.print(outputstring);
+        //client.write(outputstring, strlen(outputstring));
      }
   }
-  client.print("]}");
+  client.println("]}");
   
   client.stop();
 }
@@ -596,9 +602,7 @@ void handleConfig() {
   //Start the response
   bool updateEEPROM = false;
   WiFiClient client = server.client();
-  client.print("HTTP/1.1 200 OK\r\n");
-  client.print("Content-Type: text/plain\r\n");
-  client.print("Connection: close\r\n\r\n");
+  client.print(JsonHeaderText);
   client.print("{\"update_config\":\"success\",\r\n");
   
   //If we have received an inactivity timer variable then update it
@@ -675,11 +679,54 @@ void handleConfig() {
 
 }
 
+void handleAlarm() {
+  //Check for a method and if so, try to process it
+  if (server.hasArg("method")) {
+    int tempnumber = -1;
+    
+    WiFiClient client = server.client();
+    client.print(JsonHeaderText);
+    client.print("{\"alarm_triggered\":\"true\"}");
+    
+    if (isDigit(server.arg("method").charAt(0))) {
+      tempnumber = (int)strtol(server.arg("method").c_str(), NULL, 10);
+      //If pin number between 0 and 16 then probably valid pin so lets try switching it!
+      if ((tempnumber <= 16) && (tempnumber >= 0)) {
+        if (activatedPinA == -1) {
+          activatedPinA = tempnumber;
+        }
+        else {
+          activatedPinB = tempnumber;
+        }
+        userPinResetTime = millis();
+        digitalWrite(tempnumber, HIGH);
+        pinMode(tempnumber, OUTPUT);
+        digitalWrite(tempnumber, LOW);
+      }
+    }
+    else if (server.arg("method") == "Serial") {
+      //Found word serial so send serial trigger to alarm
+      handleTriggerAlarm();
+    }
+    
+    //Can't easily close the window now, buts leave here anyway
+    //server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
+  }
+  else {
+    //No command so send a response to say so
+    server.send(200, "text/html", "<html><b>To trigger an alarm you must add the argument 'method' e.g. /alarm?method=12 - but use carefully as some pins may crash the Wemos!</b></html>");
+    return;
+  }
+}
+
+void handleTriggerAlarm() {
+  DEBUG(LOG_NOTICE,"Trigger Alarm Command received from Web");
+  pm.sendCommand(Pmax_ALARM);
+}
+
 void handleArmAway() {
   DEBUG(LOG_NOTICE,"Arm Away Command received from Web");
-  pm.sendCommand(Pmax_ARMAWAY);
-  //SendMQTTMessage("TESTMQTT1", "TESTMQTT2", 0, ALARM_STATE_CHANGE);
-        
+  pm.sendCommand(Pmax_ARMAWAY);        
 }
 
 void handleArmHome() {
@@ -690,6 +737,36 @@ void handleArmHome() {
 void handleDisarm() {
   DEBUG(LOG_NOTICE,"Disarm command received from Web");
   pm.sendCommand(Pmax_DISARM);
+}
+
+void handleArmAwayInstant() {
+  DEBUG(LOG_NOTICE,"Instant Arm Away Command from Web");
+  pm.sendCommand(Pmax_ARMAWAY_INSTANT);
+}
+
+void handleArmHomeInstant() {
+  DEBUG(LOG_NOTICE,"Instant Arm Home command from Web");
+  pm.sendCommand(Pmax_ARMHOME_INSTANT);
+}
+
+void handleRestart() {
+  //This restarts the ESP from a web command in case it is needed
+  server.send(200, "text/plain", "ESP is restarting (can also reset with changed URL)");
+  server.stop();
+  delay(2000);
+  ESP.restart();
+}
+
+void handleReboot() {
+  handleRestart();
+}
+
+void handleReset() {
+  //This resets the ESP from a web command in case it is needed
+  server.send(200, "text/plain", "ESP is resetting (can also restart with changed URL)");
+  server.stop();
+  delay(2000);
+  ESP.reset();
 }
 
 void handleNotFound(){
@@ -707,15 +784,38 @@ void handleNotFound(){
   server.send(404, "text/plain", message);
 }
 
+void handleTest() {
+  //Start the response
+  WiFiClient client = server.client();
+  client.print(JsonHeaderText);
+  client.print("{\"test\":\"");
+  
+  //If we have received an inactivity timer variable then update it
+  if (server.hasArg("value")) {
+      char str[8];
+      int tempnumber = atoi(server.arg("value").c_str());
+      sprintf(str, "%#0X", tempnumber);
+      client.print(str);
+      client.print("\"}\r\n");
+      pm.sendCommandCC(tempnumber);
+      client.stop();
+  }
+}
+
 void setup(void){
+
+  //First lets make a few common output pins as high just to prevent accidental triggering of the alarm
+  //Paranoid process is to set it high, then make it an output, and then set high just to be super safe
+  digitalWrite(12, HIGH);
+  digitalWrite(13, HIGH);
+  digitalWrite(14, HIGH);
+  digitalWrite(0, HIGH);
 
   Serial.begin(9600); //connect to PowerMax interface
 
   //Add the EEPROM in order to save values for ST and immediately read IP and port for SmartThings
   EEPROM.begin(512);
   ReadEEPROMSettings();
-
-
 
   /*
   WiFi.mode(WIFI_STA);
@@ -768,7 +868,11 @@ void setup(void){
   server.on("/refresh", handleRefresh);
   server.on("/getzonenames", handleGetZoneNames);
   server.on("/config", handleConfig);
-  //server.on("/config", HTTP_POST, handleConfig);
+  server.on("/restart", handleRestart);
+  server.on("/reset", handleReset);
+  server.on("/reboot", handleReboot);
+  server.on("/test", handleTest);
+  server.on("/alarm", handleAlarm);
   server.on("/armaway", [](){
     handleArmAway();
     server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
@@ -779,6 +883,14 @@ void setup(void){
   });
   server.on("/disarm", [](){
     handleDisarm();
+    server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
+  });
+  server.on("/armawayinstant", [](){
+    handleArmAwayInstant();
+    server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
+  });
+  server.on("/armhomeinstant", [](){
+    handleArmHomeInstant();
     server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
   });
   server.on("/ping", [](){
@@ -1093,6 +1205,21 @@ void loop(void){
 
   //Here we also check if we need to send any inactivity messages to ST
   pm.CheckInactivityTimers();
+
+  //Here we reset manual pin timers in case they are running (i.e. output relay pin is on)
+  if (userPinResetTime > 0) {
+    if ((millis() - userPinResetTime >= 5000)) {
+      userPinResetTime = 0;
+      if (activatedPinA != -1) {
+        digitalWrite(activatedPinA, HIGH);
+        activatedPinA = -1;
+      }
+      if (activatedPinB != -1) {
+        digitalWrite(activatedPinB, HIGH);
+        activatedPinB = -1;
+      }
+    }
+  }
 
   static unsigned long lastMsg = 0;
   if(serialHandler(&pm) == true)
