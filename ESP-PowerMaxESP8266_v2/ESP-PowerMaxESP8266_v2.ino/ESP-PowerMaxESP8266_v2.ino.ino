@@ -432,8 +432,8 @@ void handleRoot() {
 		"<a href='/disarm' target='_blank'>Disarm</a><br><br>"
 		"<a href='/armhome' target='_blank'>Arm Home</a><br>"
                 "<a href='/armawayinstant' target='_blank'>Instant Arm Away</a><br>"
-                "<a href='/armhomeinstant' target='_blank'>Instant Arm Home</a><br>"
-                "<a href='/alarm' target='_blank'>Sound the Alarm Options</a><br><br>"
+                //"<a href='/armhomeinstant' target='_blank'>Instant Arm Home</a><br>"
+                //"<a href='/alarm' target='_blank'>Sound the Alarm Options</a><br><br>"
 		"JSON Endpoints<br>"
 		"<a href='/status'>Alarm Status</a><br>"
 		"<a href='/settings'>Smart Things Details</a><br>"
@@ -446,7 +446,7 @@ void handleRoot() {
 		(int)days, (int)hours, (int)minutes, (int)val, 
 		ESP.getFreeHeap(),
 		mqttClient.state(), 
-		mqtt_reconnects);"
+		mqtt_reconnects);
 
   server.send(200, "text/html", szTmp);
 }
@@ -720,8 +720,8 @@ void handleAlarm() {
 }
 
 void handleTriggerAlarm() {
-  DEBUG(LOG_NOTICE,"Trigger Alarm Command received from Web");
-  pm.sendCommand(Pmax_ALARM);
+  DEBUG(LOG_NOTICE,"Trigger Alarm Command received from Web - Not implemented");
+  //pm.sendCommand(Pmax_ALARM);
 }
 
 void handleArmAway() {
@@ -745,8 +745,8 @@ void handleArmAwayInstant() {
 }
 
 void handleArmHomeInstant() {
-  DEBUG(LOG_NOTICE,"Instant Arm Home command from Web");
-  pm.sendCommand(Pmax_ARMHOME_INSTANT);
+  DEBUG(LOG_NOTICE,"Instant Arm Home command from Web - Not implemented");
+ // pm.sendCommand(Pmax_ARMHOME_INSTANT);
 }
 
 void handleRestart() {
