@@ -335,18 +335,18 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
 void MQTTcallback(char* topic, byte* payload, unsigned int length) {
   // Callback from mqtt remains to be done for powermax.. this is just dummy function for now.
   
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
+  //Serial.print("Message arrived [");
+  //Serial.print(topic);
+  //Serial.print("] ");
+  //for (int i = 0; i < length; i++) {
+    //Serial.print((char)payload[i]);
+  //}
+  //Serial.println();
 
 /*
   // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == '1') {
-    digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
+   if ((char)payload[0] == '1') {
+     digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
     // but actually the LED is on; this is because
     // it is acive low on the ESP-01)
   } else {
@@ -363,19 +363,19 @@ void reconnect() {
   
   // Loop until we're reconnected
   if (!mqttClient.connected()) {
-    Serial.print("Attempting MQTT connection...");
+    //Serial.print("Attempting MQTT connection...");
     // Attempt to connect
     if (mqttClient.connect("PowerMaxClient", MQTT_USER, MQTT_PASS)) {
-      Serial.println("connected");
+      //Serial.println("connected");
       //mqttClient.publish("home/alarm/powermax", "Powermax Connected");
       // Once connected, publish an announcement...
       mqttClient.subscribe(mqttAlarmInputTopic);
       mqtt_reconnects++;
     } else {
       mqttFail++;
-      Serial.print("failed, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" try again in 5 seconds");
+      //Serial.print("failed, rc=");
+      //Serial.print(mqttClient.state());
+      //Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
       //delay(5000);
     }
@@ -843,7 +843,7 @@ void setup(void){
   //if it does not connect it starts an access point with the specified name
   //and goes into a blocking loop awaiting configuration
   if(!wifiManager.autoConnect("VisonicPowermaxBridge")) {
-      Serial.println("failed to connect and hit timeout");
+      //Serial.println("failed to connect and hit timeout");
       delay(3000);
       //reset and try again, or maybe put it to deep sleep
       ESP.reset();
@@ -856,7 +856,7 @@ void setup(void){
   // - second argument is the IP address to advertise
   //   we send our IP address on the WiFi network
   if (!MDNS.begin("esp8266-PowermaxBridge")) {
-    Serial.println("Error setting up MDNS responder!");
+    //Serial.println("Error setting up MDNS responder!");
     while(1) { 
       delay(1000);
     }
