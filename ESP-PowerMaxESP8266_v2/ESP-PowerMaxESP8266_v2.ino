@@ -77,6 +77,8 @@ char* mqttAlarmStateTopic = "powermax/alarm/state";
 char* mqttZoneStateTopic = "powermax/zone/state";
 //MQTT topic for MQTT input to powermax alarm
 char* mqttAlarmInputTopic = "powermax/alarm/input";
+//MQTT topic for MQTT verbose output, to catch or show more details.
+char* mqttAlarmStateTopicVerbose = "powermax/alarm/verbose_state";
 
 
 
@@ -293,9 +295,32 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
   char zoneIDtext[10];
   itoa(zoneID, zoneIDtext, 10);
 
+  char* hassZoneOrEvent;
+  
+  // Translate from pmax.cpp - PmaxLogEvents to hass MQTT accepted payloads.
+    if(ZoneOrEvent=="Arm Home" || ZoneOrEvent=="Quick Arm Home")
+      { 
+        hassZoneOrEvent="armed_home"; 
+       }
+    else if(ZoneOrEvent=="Arm Away" || ZoneOrEvent=="Quick Arm Away")
+      {
+        hassZoneOrEvent="armed_away";
+      }
+    else if(ZoneOrEvent=="Disarm")
+      {
+        hassZoneOrEvent="disarmed";
+      }
+     else if(ZoneOrEvent=="Interior Alarm" || ZoneOrEvent=="Perimeter Alarm" || ZoneOrEvent=="Tamper Alarm" || ZoneOrEvent=="Fire" )
+      {
+        hassZoneOrEvent="triggered";
+      }
+
+
   DEBUG(LOG_NOTICE,"Creating JSON string for MQTT");
   //Build key JSON headers and structure  
   if (zone_or_system_update == ALARM_STATE_CHANGE) {
+    
+
     //Here we have an alarm status change (zone 0) so put the status into JSON
     strncpy(message_text, "{\r\n\"stat_str\": \"", 600);
     strcat(message_text, ZoneOrEvent);
@@ -304,12 +329,19 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, "\"");
     strcat(message_text, "\r\n}\r\n");
     //Send alarm state
+   
 
-    if (mqttClient.publish(mqttAlarmStateTopic, message_text, true) == true) {
+    if (mqttClient.publish(mqttAlarmStateTopic, hassZoneOrEvent, true) == true) {  // Send translated mqtt message and retain last known status
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
-      }     
+      }   
+      
+    if (mqttClient.publish(mqttAlarmStateTopicVerbose, message_text, true) == true) {  // Send verbose mqtt message and retain last known status
+       DEBUG(LOG_NOTICE,"Success sending MQTT message");
+      } else {
+       DEBUG(LOG_NOTICE,"Error sending MQTT message");
+      }   
   }
   else if (zone_or_system_update == ZONE_STATE_CHANGE) {
     //Here we have a zone status change so put this information into JSON
@@ -322,7 +354,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, "\"");
     strcat(message_text, "\r\n}\r\n");
     //Send zone state
-    if (mqttClient.publish(mqttZoneStateTopic, message_text, true) == true) {
+    if (mqttClient.publish(mqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
