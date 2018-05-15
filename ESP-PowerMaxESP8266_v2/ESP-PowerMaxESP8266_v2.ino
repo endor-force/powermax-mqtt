@@ -36,7 +36,10 @@ Set up using web browser: http://192.168.1.xxx/config?ip_for_mqtt=192.168.1.yyy&
 #define PM_ENABLE_TELNET_ACCESS
 
 //This enables control over your system, when commented out, alarm is 'read only' (esp will read the state, but will never arm/disarm)
-#define PM_ALLOW_CONTROL
+#define PM_ALLOW_CONTROL_MQTT
+// #define PM_ALLOW_CONTROL_TELNET
+// #define PM_ALLOW_CONTROL_WEB
+
 
 //This enables flashing of ESP via OTA (WiFI)
 #define PM_ENABLE_OTA_UPDATES
@@ -353,8 +356,14 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, WhoOrState);
     strcat(message_text, "\"");
     strcat(message_text, "\r\n}\r\n");
+    
     //Send zone state
-    if (mqttClient.publish(mqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status
+    char* hassmqttZoneStateTopic = "";
+    strcat(hassmqttZoneStateTopic, mqttZoneStateTopic);
+    strcat(hassmqttZoneStateTopic, "\\");
+    strcat(hassmqttZoneStateTopic, zoneIDtext);
+    
+    if (mqttClient.publish(hassmqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
@@ -365,30 +374,30 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
 
 
 void MQTTcallback(char* topic, byte* payload, unsigned int length) {
-  // Callback from mqtt remains to be done for powermax.. this is just dummy function for now.
-  
-  //Serial.print("Message arrived [");
-  //Serial.print(topic);
-  //Serial.print("] ");
-  //for (int i = 0; i < length; i++) {
-    //Serial.print((char)payload[i]);
-  //}
-  //Serial.println();
+#ifdef PM_ALLOW_CONTROL_MQTT // Only allow callback of commands if PM_ALLOW_CONTROL is enabled.
 
-/*
-  // Switch on the LED if an 1 was received as first character
-   if ((char)payload[0] == '1') {
-     digitalWrite(BUILTIN_LED, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is acive low on the ESP-01)
-  } else {
-    digitalWrite(BUILTIN_LED, HIGH);  // Turn the LED off by making the voltage HIGH
+  payload[length] = '\0';
+  String alarm_command = String((char*)payload); // Decode byte to string.. (note string has reputation of causing memory issues??)
+
+  Serial.println(alarm_command);//alarm_command);
+
+  if (alarm_command=="DISARM")
+  {
+    handleDisarm();
+  } 
+  else if (alarm_command=="ARM_HOME")
+  {
+    handleArmHome();
   }
-*/
+    else if (alarm_command=="ARM_AWAY")
+  {
+    handleArmAway(); 
+  }
+  
+#endif
  
 
 }
-
 
 //MQTT Reconnect if not connected
 void reconnect() {
@@ -459,6 +468,7 @@ void handleRoot() {
 		"MAC Address: %02X%02X%02X%02X%02X%02X<br>"
 		"Uptime: %02d:%02d:%02d.%02d<br>Free heap: %u<br>MQTT Status code: %u<br>"
 		"MQTT Reconnects: %u<br><br>Web Commands<br>"
+		#ifdef PM_ALLOW_CONTROL_WEB //Only show arm and disarm functions if PM_ALLOW_CONTROL_WEB is set.
 		"<a href='/armaway' target='_blank'>Arm Away</a><br>"
 		"<a href='/armhome' target='_blank'>Arm Home</a><br>"
 		"<a href='/disarm' target='_blank'>Disarm</a><br><br>"
@@ -466,9 +476,10 @@ void handleRoot() {
                 "<a href='/armawayinstant' target='_blank'>Instant Arm Away</a><br>"
                 //"<a href='/armhomeinstant' target='_blank'>Instant Arm Home</a><br>"
                 //"<a href='/alarm' target='_blank'>Sound the Alarm Options</a><br><br>"
+		#endif
 		"JSON Endpoints<br>"
 		"<a href='/status'>Alarm Status</a><br>"
-		"<a href='/settings'>Smart Things Details</a><br>"
+		"<a href='/settings'>Settings</a><br>"
 		"<a href='/getzonenames'>Get Zone Names</a><br><br>"
 		"Configuration<br>"
 		"<a href='/config'>inactivity_seconds, ip_for_mqtt, port_for_mqtt, mqtt_user, mqtt_pass</a><br>"
@@ -757,17 +768,17 @@ void handleTriggerAlarm() {
 }
 
 void handleArmAway() {
-  DEBUG(LOG_NOTICE,"Arm Away Command received from Web");
-  pm.sendCommand(Pmax_ARMAWAY);        
+  DEBUG(LOG_NOTICE,"Arm Away Command received from Web or MQTT");
+  pm.sendCommand(Pmax_ARMAWAY);     
 }
 
 void handleArmHome() {
-  DEBUG(LOG_NOTICE,"Arm Home command received from Web");
+  DEBUG(LOG_NOTICE,"Arm Home command received from Web or MQTT");
   pm.sendCommand(Pmax_ARMHOME);
 }
 
 void handleDisarm() {
-  DEBUG(LOG_NOTICE,"Disarm command received from Web");
+  DEBUG(LOG_NOTICE,"Disarm command received from Web or MQTT");
   pm.sendCommand(Pmax_DISARM);
 }
 
@@ -904,6 +915,7 @@ void setup(void){
   server.on("/reset", handleReset);
   server.on("/reboot", handleReboot);
   server.on("/test", handleTest);
+  #ifdef PM_ALLOW_CONTROL_WEB //Only show arm and disarm functions if PM_ALLOW_CONTROL_WEB is set.
   server.on("/alarm", handleAlarm);
   server.on("/armaway", [](){
     handleArmAway();
@@ -925,6 +937,7 @@ void setup(void){
     handleArmHomeInstant();
     server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
   });
+  #endif
   server.on("/ping", [](){
     server.send(200, "text/plain", "{\"ping_alive\": true}");
   });
@@ -1054,7 +1067,7 @@ void handleTelnetRequests(PowerMaxAlarm* pm) {
         return;
     }
 
-#ifdef PM_ALLOW_CONTROL
+#ifdef PM_ALLOW_CONTROL_TELNET
     if ( c == 'h' ) {
       DEBUG(LOG_NOTICE,"Arming home");
       pm->sendCommand(Pmax_ARMHOME);
@@ -1119,7 +1132,7 @@ void handleTelnetRequests(PowerMaxAlarm* pm) {
         DEBUG(LOG_NO_FILTER,"\t C - reset device");        
         DEBUG(LOG_NO_FILTER,"\t p - output debug messages");
         DEBUG(LOG_NO_FILTER,"\t P - stop outputing debug messages");
-#ifdef PM_ALLOW_CONTROL        
+#ifdef PM_ALLOW_CONTROL_TELNET        
         DEBUG(LOG_NO_FILTER,"\t h - Arm Home");
         DEBUG(LOG_NO_FILTER,"\t d - Disarm");
         DEBUG(LOG_NO_FILTER,"\t a - Arm Away");
