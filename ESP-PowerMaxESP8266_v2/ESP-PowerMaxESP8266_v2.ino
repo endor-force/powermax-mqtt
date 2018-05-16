@@ -379,7 +379,7 @@ void MQTTcallback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
   String alarm_command = String((char*)payload); // Decode byte to string.. (note string has reputation of causing memory issues??)
 
-  Serial.println(alarm_command);//alarm_command);
+ // Serial.println(alarm_command);//alarm_command);
 
   if (alarm_command=="DISARM")
   {
