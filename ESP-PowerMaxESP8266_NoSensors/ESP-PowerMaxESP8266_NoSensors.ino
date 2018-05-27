@@ -72,7 +72,6 @@ static unsigned long lastRefreshTime = 0;
 int mqttFail = 0;
 
 int mqtt_reconnects = 0;
-int mqtt_failed = 0;
 
 //MQTT topic for Alarm state information output from Powermax alarm
 char* mqttAlarmStateTopic = "powermax/alarm/state";
@@ -291,7 +290,7 @@ PubSubClient mqttClient(mqttWiFiClient);
 void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsigned char zoneID, int zone_or_system_update) {
 
   //Serial.println("MQTT Message initialized");
-  char message_text[600];
+  char message_text[6000];
   message_text[0] = '\0';
 
   //Convert zone ID to text
@@ -317,6 +316,9 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
       {
         hassZoneOrEvent="triggered";
       }
+      else {
+        hassZoneOrEvent="other";
+      }
 
 
   DEBUG(LOG_NOTICE,"Creating JSON string for MQTT");
@@ -325,7 +327,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     
 
     //Here we have an alarm status change (zone 0) so put the status into JSON
-    strncpy(message_text, "{\r\n\"stat_str\": \"", 600);
+    strncpy(message_text, "{\r\n\"stat_str\": \"", 6000);
     strcat(message_text, ZoneOrEvent);
     strcat(message_text, "\",\r\n\"stat_update_from\": \"");
     strcat(message_text, WhoOrState);
@@ -348,7 +350,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
   }
   else if (zone_or_system_update == ZONE_STATE_CHANGE) {
     //Here we have a zone status change so put this information into JSON
-    strncpy(message_text, "{\r\n\"zone_id\": \"", 600);
+    strncpy(message_text, "{\r\n\"zone_id\": \"", 6000);
     strcat(message_text, zoneIDtext);
     strcat(message_text, "\",\r\n\"zone_name\": \"");
     strcat(message_text, ZoneOrEvent);
