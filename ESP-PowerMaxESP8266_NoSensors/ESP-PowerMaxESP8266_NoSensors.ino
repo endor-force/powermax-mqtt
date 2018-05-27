@@ -325,7 +325,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
   //Build key JSON headers and structure  
   if (zone_or_system_update == ALARM_STATE_CHANGE) {
     
-
+/*
     //Here we have an alarm status change (zone 0) so put the status into JSON
     strncpy(message_text, "{\r\n\"stat_str\": \"", 6000);
     strcat(message_text, ZoneOrEvent);
@@ -333,7 +333,8 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, WhoOrState);
     strcat(message_text, "\"");
     strcat(message_text, "\r\n}\r\n");
-    //Send alarm state
+    //Send alarm state 
+ */
    
 
     if (mqttClient.publish(mqttAlarmStateTopic, hassZoneOrEvent, true) == true) {  // Send translated mqtt message and retain last known status
@@ -341,12 +342,12 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
       }   
-      
+      /*
     if (mqttClient.publish(mqttAlarmStateTopicVerbose, message_text, true) == true) {  // Send verbose mqtt message and retain last known status
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
-      }   
+      }   */
   }
   else if (zone_or_system_update == ZONE_STATE_CHANGE) {
     //Here we have a zone status change so put this information into JSON
