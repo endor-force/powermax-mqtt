@@ -358,7 +358,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, "\r\n}\r\n");
     
     //Send zone state
-    char* hassmqttZoneStateTopic = "";
+    char* hassmqttZoneStateTopic;
     strcat(hassmqttZoneStateTopic, mqttZoneStateTopic);
     strcat(hassmqttZoneStateTopic, "/");
     strcat(hassmqttZoneStateTopic, zoneIDtext);
@@ -849,10 +849,10 @@ void setup(void){
 
   //First lets make a few common output pins as high just to prevent accidental triggering of the alarm
   //Paranoid process is to set it high, then make it an output, and then set high just to be super safe
-  digitalWrite(12, HIGH);
-  digitalWrite(13, HIGH);
-  digitalWrite(14, HIGH);
-  digitalWrite(0, HIGH);
+  //digitalWrite(12, HIGH);
+  //digitalWrite(13, HIGH);
+  //digitalWrite(14, HIGH);
+  //digitalWrite(0, HIGH);
 
   Serial.begin(9600); //connect to PowerMax interface
 
