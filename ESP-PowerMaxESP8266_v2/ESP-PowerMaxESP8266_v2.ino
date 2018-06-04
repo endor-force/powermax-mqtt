@@ -360,7 +360,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     //Send zone state
     char* hassmqttZoneStateTopic = "";
     strcat(hassmqttZoneStateTopic, mqttZoneStateTopic);
-    strcat(hassmqttZoneStateTopic, "\\");
+    strcat(hassmqttZoneStateTopic, "/");
     strcat(hassmqttZoneStateTopic, zoneIDtext);
     
     if (mqttClient.publish(hassmqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
