@@ -358,12 +358,12 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, "\r\n}\r\n");
     
     //Send zone state
-    char* hassmqttZoneStateTopic;
+  /* char* hassmqttZoneStateTopic;
     strcat(hassmqttZoneStateTopic, mqttZoneStateTopic);
     strcat(hassmqttZoneStateTopic, "/");
-    strcat(hassmqttZoneStateTopic, zoneIDtext);
+    strcat(hassmqttZoneStateTopic, zoneIDtext); */
     
-    if (mqttClient.publish(hassmqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
+    if (mqttClient.publish(mqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
