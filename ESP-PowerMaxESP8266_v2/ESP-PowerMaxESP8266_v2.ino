@@ -78,6 +78,7 @@ int mqtt_failed = 0;
 char* mqttAlarmStateTopic = "powermax/alarm/state";
 //MQTT topic for Zone state information output from Powermax alarm
 char* mqttZoneStateTopic = "powermax/zone/state";
+char* hassmqttZoneStateTopic = "powermax/zone/state/";
 //MQTT topic for MQTT input to powermax alarm
 char* mqttAlarmInputTopic = "powermax/alarm/input";
 //MQTT topic for MQTT verbose output, to catch or show more details.
@@ -358,12 +359,13 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
     strcat(message_text, "\r\n}\r\n");
     
     //Send zone state
-  /* char* hassmqttZoneStateTopic;
-    strcat(hassmqttZoneStateTopic, mqttZoneStateTopic);
-    strcat(hassmqttZoneStateTopic, "/");
-    strcat(hassmqttZoneStateTopic, zoneIDtext); */
+
+    char zoneStateTopic[100];
+    zoneStateTopic[0] = '\0';
+    strncpy(zoneStateTopic, hassmqttZoneStateTopic, 100);
+    strcat(zoneStateTopic, zoneIDtext);
     
-    if (mqttClient.publish(mqttZoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
+    if (mqttClient.publish(zoneStateTopic, message_text, true) == true) {  // Send mqtt message and retain last known status and sends in sub topic with the zoneID.
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
