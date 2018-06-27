@@ -341,11 +341,11 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
       }   
       
-    if (mqttClient.publish(mqttAlarmStateTopicVerbose, message_text, true) == true) {  // Send verbose mqtt message and retain last known status
+ /*   if (mqttClient.publish(mqttAlarmStateTopicVerbose, message_text, true) == true) {  // Send verbose mqtt message and retain last known status
        DEBUG(LOG_NOTICE,"Success sending MQTT message");
       } else {
        DEBUG(LOG_NOTICE,"Error sending MQTT message");
-      }   
+      }   */
   }
   else if (zone_or_system_update == ZONE_STATE_CHANGE) {
     //Here we have a zone status change so put this information into JSON
@@ -724,7 +724,7 @@ void handleConfig() {
 
 }
 
-void handleAlarm() {
+/* void handleAlarm() {
   //Check for a method and if so, try to process it
   if (server.hasArg("method")) {
     int tempnumber = -1;
@@ -763,7 +763,7 @@ void handleAlarm() {
     return;
   }
 }
-
+*/
 void handleTriggerAlarm() {
   DEBUG(LOG_NOTICE,"Trigger Alarm Command received from Web - Not implemented");
   //pm.sendCommand(Pmax_ALARM);
@@ -918,7 +918,7 @@ void setup(void){
   server.on("/reboot", handleReboot);
   server.on("/test", handleTest);
   #ifdef PM_ALLOW_CONTROL_WEB //Only show arm and disarm functions if PM_ALLOW_CONTROL_WEB is set.
-  server.on("/alarm", handleAlarm);
+  // server.on("/alarm", handleAlarm);
   server.on("/armaway", [](){
     handleArmAway();
     server.send(200, "text/html", " {} <body> window.onload = <script> window.close() </script>; </body>");
