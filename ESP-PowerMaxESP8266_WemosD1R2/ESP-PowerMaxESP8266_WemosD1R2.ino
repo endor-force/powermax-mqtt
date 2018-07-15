@@ -67,22 +67,24 @@ IPAddress PM_LAN_BROADCAST_IP(192, 168, 32, 12);
 #define PM_ENABLE_MQTT_ACCESS
 
 //MQTT Fail retry interval, default set to 5 seconds, if it fails 3 times it will be set to wait 60 seconds and then try three more times continously.
-static unsigned long REFRESH_INTERVAL = 5000; // ms
-static unsigned long lastRefreshTime = 0;
-int mqttFail = 0;
+//static unsigned long REFRESH_INTERVAL = 5000; // ms
+//static unsigned long lastRefreshTime = 0;
+//int mqttFail = 0;
+long lastReconnectAttempt = 0;
 
-int mqtt_reconnects = 0;
-int mqtt_failed = 0;
+
+//int mqtt_reconnects = 0;
+//int mqtt_failed = 0;
 
 //MQTT topic for Alarm state information output from Powermax alarm
-char* mqttAlarmStateTopic = "powermax/alarm/state";
+const char* mqttAlarmStateTopic = "powermax/alarm/state";
 //MQTT topic for Zone state information output from Powermax alarm
-char* mqttZoneStateTopic = "powermax/zone/state";
-char* hassmqttZoneStateTopic = "powermax/zone/state/";
+const char* mqttZoneStateTopic = "powermax/zone/state";
+const char* hassmqttZoneStateTopic = "powermax/zone/state/";
 //MQTT topic for MQTT input to powermax alarm
-char* mqttAlarmInputTopic = "powermax/alarm/input";
+const char* mqttAlarmInputTopic = "powermax/alarm/input";
 //MQTT topic for MQTT verbose output, to catch or show more details.
-char* mqttAlarmStateTopicVerbose = "powermax/alarm/verbose_state";
+const char* mqttAlarmStateTopicVerbose = "powermax/alarm/verbose_state";
 
 
 
@@ -299,24 +301,24 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
   char zoneIDtext[10];
   itoa(zoneID, zoneIDtext, 10);
 
-  char* hassZoneOrEvent;
+  char hassZoneOrEvent[50];
   
   // Translate from pmax.cpp - PmaxLogEvents to hass MQTT accepted payloads.
     if(ZoneOrEvent=="Arm Home" || ZoneOrEvent=="Quick Arm Home")
       { 
-        hassZoneOrEvent="armed_home"; 
+        strcpy(hassZoneOrEvent,"armed_home"); 
        }
     else if(ZoneOrEvent=="Arm Away" || ZoneOrEvent=="Quick Arm Away")
       {
-        hassZoneOrEvent="armed_away";
+        strcpy(hassZoneOrEvent,"armed_away");
       }
     else if(ZoneOrEvent=="Disarm")
       {
-        hassZoneOrEvent="disarmed";
+        strcpy(hassZoneOrEvent,"disarmed");
       }
      else if(ZoneOrEvent=="Interior Alarm" || ZoneOrEvent=="Perimeter Alarm" || ZoneOrEvent=="Tamper Alarm" || ZoneOrEvent=="Fire" )
       {
-        hassZoneOrEvent="triggered";
+        strcpy(hassZoneOrEvent,"triggered");
       }
 
 
@@ -375,7 +377,7 @@ void SendMQTTMessage(const char* ZoneOrEvent, const char* WhoOrState, const unsi
 }
 
 
-void MQTTcallback(char* topic, byte* payload, unsigned int length) {
+void MQTTcallback(char topic[], byte* payload, unsigned int length) {
 #ifdef PM_ALLOW_CONTROL_MQTT // Only allow callback of commands if PM_ALLOW_CONTROL is enabled.
 
   payload[length] = '\0';
@@ -402,6 +404,7 @@ void MQTTcallback(char* topic, byte* payload, unsigned int length) {
 }
 
 //MQTT Reconnect if not connected
+/* OLD RECONNECT
 void reconnect() {
   
   // Loop until we're reconnected
@@ -415,7 +418,7 @@ void reconnect() {
       mqttClient.subscribe(mqttAlarmInputTopic);
       mqtt_reconnects++;
     } else {
-      mqttFail++;
+      //mqttFail++;
       //Serial.print("failed, rc=");
       //Serial.print(mqttClient.state());
       //Serial.println(" try again in 5 seconds");
@@ -423,8 +426,18 @@ void reconnect() {
       //delay(5000);
     }
   }
-}
+} */
 
+/* NEW RECONNECT */
+boolean reconnect() {
+  if (mqttClient.connect("PowerMaxClient", MQTT_USER, MQTT_PASS)) {
+    // Once connected, publish an announcement...
+    //client.publish("outTopic","hello world");
+    // ... and resubscribe
+    mqttClient.subscribe("mqttAlarmInputTopic");
+  }
+  return mqttClient.connected();
+}
 
 // MQTT RELATED -- DONE --
 
@@ -489,9 +502,9 @@ void handleRoot() {
 		"</html>",
 		mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],
 		(int)days, (int)hours, (int)minutes, (int)val, 
-		ESP.getFreeHeap(),
-		mqttClient.state(), 
-		mqtt_reconnects);
+		ESP.getFreeHeap());
+		//mqttClient.state(), 
+		//mqtt_reconnects);
 
   server.send(200, "text/html", szTmp);
 }
@@ -717,7 +730,7 @@ void handleConfig() {
 
   //Now save the values to EEPROM if updated values received
   if (updateEEPROM) {
-      REFRESH_INTERVAL = 5000;
+//      REFRESH_INTERVAL = 5000;
       mqttClient.setServer(IP_FOR_MQTT, atoi(PORT_FOR_MQTT));
       WriteEEPROMSettings();
   }
@@ -894,7 +907,7 @@ void setup(void){
       ESP.reset();
       delay(5000);
   }
-  
+  lastReconnectAttempt = 0;
   // Set up mDNS responder:
   // - first argument is the domain name, in this example
   //   the fully-qualified domain name is "esp8266.local"
@@ -1292,6 +1305,8 @@ void loop(void){
 
 #ifdef PM_ENABLE_MQTT_ACCESS
 
+/* OLD RECONNECT */
+/*
   if (!mqttClient.connected() && (millis() - lastRefreshTime >= REFRESH_INTERVAL)) {
     lastRefreshTime += REFRESH_INTERVAL;
     reconnect();
@@ -1301,6 +1316,24 @@ void loop(void){
     }  
   }
   mqttClient.loop();
+*/
+/* NEW RECONNECT */
+if (!mqttClient.connected()) {
+    long now = millis();
+    if (now - lastReconnectAttempt > 5000) {
+      lastReconnectAttempt = now;
+      // Attempt to reconnect
+      if (reconnect()) {
+        lastReconnectAttempt = 0;
+      }
+    }
+  } else {
+    // Client connected
+
+    mqttClient.loop();
+}
+
+
 #endif
 
 }
