@@ -434,7 +434,7 @@ boolean reconnect() {
     // Once connected, publish an announcement...
     //client.publish("outTopic","hello world");
     // ... and resubscribe
-    mqttClient.subscribe("mqttAlarmInputTopic");
+    mqttClient.subscribe(mqttAlarmInputTopic);
   }
   return mqttClient.connected();
 }
@@ -481,8 +481,7 @@ void handleRoot() {
   sprintf(szTmp, "<html>"
   		"<b>Dashboard for esp8266 controlled Visonic Powermax.</b><br><br>"
 		"MAC Address: %02X%02X%02X%02X%02X%02X<br>"
-		"Uptime: %02d:%02d:%02d.%02d<br>Free heap: %u<br>MQTT Status code: %u<br>"
-		"MQTT Reconnects: %u<br><br>Web Commands<br>"
+		"Uptime: %02d:%02d:%02d.%02d<br>Free heap: %u<br><br>Web Commands<br>"
 		#ifdef PM_ALLOW_CONTROL_WEB //Only show arm and disarm functions if PM_ALLOW_CONTROL_WEB is set.
 		"<a href='/armaway' target='_blank'>Arm Away</a><br>"
 		"<a href='/armhome' target='_blank'>Arm Home</a><br>"
